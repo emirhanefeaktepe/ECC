@@ -14,6 +14,8 @@ const {
   buildDigest,
   chunkMessage,
   classifyMessage,
+  decryptState,
+  encryptState,
   extractDeadlines,
   foldText,
   mergeRecords,
@@ -87,7 +89,8 @@ function run() {
   });
 
   check('sanitizeText strips control and bidi override characters', () => {
-    assert.strictEqual(sanitizeText('a\u0007b‮c​d\ne'), 'abcd\ne');
+    const hostile = `a${String.fromCharCode(7)}b${String.fromCharCode(0x202e)}c${String.fromCharCode(0x200b)}d\ne`;
+    assert.strictEqual(sanitizeText(hostile), 'abcd\ne');
   });
 
   check('classifyMessage detects Turkish assignment, exam, schedule and important', () => {
@@ -204,8 +207,8 @@ function run() {
   check('renderDigest produces Turkish markdown and escaped text output', () => {
     const digest = buildDigest(parseTelegramExport(SAMPLE_EXPORT), { today: '2026-09-24' });
     const markdown = renderDigest(digest);
-    assert.ok(markdown.startsWith('# 🎓 Üniversite Telegram Özeti'));
-    assert.ok(markdown.includes('## 📚 Ödevler ve Teslimler (1)'));
+    assert.ok(markdown.startsWith('# Üniversite Telegram Özeti'));
+    assert.ok(markdown.includes('## Ödevler ve Teslimler (1)'));
     assert.ok(markdown.includes('**5 Ekim Pazartesi 23:59** (11 gün kaldı)'));
     assert.ok(markdown.includes('(geçti)'));
     const text = renderDigest(digest, { format: 'text' });
@@ -228,6 +231,14 @@ function run() {
     const chunks = chunkMessage(Array.from({ length: 50 }, (_, i) => `line ${i} ${'x'.repeat(100)}`).join('\n'), 1000);
     assert.ok(chunks.length > 1);
     assert.ok(chunks.every(chunk => chunk.length <= 1000));
+  });
+
+  check('encryptState round-trips and rejects a wrong key', () => {
+    const box = encryptState('{"offset":5}', 'secret-1');
+    assert.ok(!box.includes('offset'));
+    assert.strictEqual(decryptState(box, 'secret-1'), '{"offset":5}');
+    assert.throws(() => decryptState(box, 'secret-2'));
+    assert.throws(() => decryptState('{"offset":5}', 'secret-1'), /not encrypted/);
   });
 
   check('parseArgs validates options', () => {

@@ -9,6 +9,8 @@
  * and English text. Pure functions only - no I/O, no network.
  */
 
+const crypto = require('crypto');
+
 const CATEGORY_ORDER = ['exam', 'assignment', 'schedule', 'important', 'material'];
 
 const CATEGORY_LABELS = {
@@ -17,14 +19,6 @@ const CATEGORY_LABELS = {
   schedule: 'Ders Değişiklikleri',
   important: 'Önemli Duyurular',
   material: 'Ders Materyalleri',
-};
-
-const CATEGORY_ICONS = {
-  assignment: '📚',
-  exam: '📝',
-  schedule: '🔄',
-  important: '📢',
-  material: '📎',
 };
 
 // Keywords are matched on ASCII-folded, lowercased text at a word start, so
@@ -494,16 +488,16 @@ function renderDigest(digest, options = {}) {
   const bold = value => (markdown ? `**${value}**` : value);
   const lines = [];
 
-  lines.push(markdown ? '# 🎓 Üniversite Telegram Özeti' : '🎓 Üniversite Telegram Özeti');
+  lines.push(markdown ? '# Üniversite Telegram Özeti' : 'ÜNİVERSİTE TELEGRAM ÖZETİ');
   lines.push('');
   lines.push(`${formatDateTr(digest.generatedAt)} · ${digest.scanned} mesaj tarandı · ${digest.other} alakasız mesaj atlandı`);
 
   if (digest.upcoming.length) {
     lines.push('');
-    lines.push(markdown ? '## ⏰ Yaklaşan Tarihler' : '⏰ YAKLAŞAN TARİHLER');
+    lines.push(markdown ? '## Yaklaşan Tarihler' : 'YAKLAŞAN TARİHLER');
     for (const item of digest.upcoming) {
       const days = relativeLabel(daysUntil(item.deadline, digest.generatedAt));
-      lines.push(`- ${bold(formatDateTr(item.deadline, item.time))} (${days}) ${CATEGORY_ICONS[item.category]} ${esc(item.chats[0])}: ${esc(item.text.slice(0, 90))}`);
+      lines.push(`- ${bold(formatDateTr(item.deadline, item.time))} (${days}) [${CATEGORY_LABELS[item.category]}] ${esc(item.chats[0])}: ${esc(item.text.slice(0, 90))}`);
     }
   }
 
@@ -511,7 +505,7 @@ function renderDigest(digest, options = {}) {
     const items = digest.sections[category];
     if (!items.length) continue;
     lines.push('');
-    const heading = `${CATEGORY_ICONS[category]} ${CATEGORY_LABELS[category]} (${items.length})`;
+    const heading = `${CATEGORY_LABELS[category]} (${items.length})`;
     lines.push(markdown ? `## ${heading}` : heading.toLocaleUpperCase('tr-TR'));
     for (const item of items) {
       const when = item.deadline
@@ -548,12 +542,40 @@ function chunkMessage(text, limit = 4000) {
   return chunks;
 }
 
+function stateKey(secret) {
+  return crypto.createHash('sha256').update(String(secret)).digest();
+}
+
+/** Encrypt the stored state (AES-256-GCM) so it can live in a CI cache. */
+function encryptState(plaintext, secret) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', stateKey(secret), iv);
+  const data = Buffer.concat([cipher.update(String(plaintext), 'utf8'), cipher.final()]);
+  return JSON.stringify({
+    v: 1,
+    iv: iv.toString('base64'),
+    tag: cipher.getAuthTag().toString('base64'),
+    data: data.toString('base64'),
+  });
+}
+
+/** Decrypt state written by encryptState; throws on a wrong key or tampering. */
+function decryptState(payload, secret) {
+  const box = JSON.parse(payload);
+  if (!box || box.v !== 1) throw new Error('state is not encrypted');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', stateKey(secret), Buffer.from(box.iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(box.tag, 'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(box.data, 'base64')), decipher.final()]).toString('utf8');
+}
+
 module.exports = {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
   buildDigest,
   chunkMessage,
   classifyMessage,
+  decryptState,
+  encryptState,
   extractDeadlines,
   foldText,
   mergeRecords,

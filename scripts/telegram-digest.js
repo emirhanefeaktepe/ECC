@@ -19,6 +19,8 @@
  * Bot mode stores seen messages in $TELEGRAM_DIGEST_HOME
  * (default ~/.ecc/telegram-digest) because the Bot API only keeps updates
  * for 24 hours - run it on a schedule (cron) so nothing is missed.
+ * Set TELEGRAM_DIGEST_KEY to encrypt that state file (required when it is
+ * kept somewhere shared, such as a GitHub Actions cache).
  */
 
 const fs = require('fs');
@@ -28,6 +30,8 @@ const { writeFileAtomic } = require('./lib/atomic-write');
 const {
   buildDigest,
   chunkMessage,
+  decryptState,
+  encryptState,
   mergeRecords,
   normalizeBotUpdates,
   parseTelegramExport,
@@ -103,13 +107,31 @@ function stateFile() {
   return path.join(home, 'state.json');
 }
 
+function stateSecret() {
+  return String(process.env.TELEGRAM_DIGEST_KEY || '');
+}
+
 function loadState(file) {
+  let raw;
   try {
-    const state = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return { offset: Number(state.offset) || 0, records: Array.isArray(state.records) ? state.records : [] };
+    raw = fs.readFileSync(file, 'utf8');
   } catch (_error) {
     return { offset: 0, records: [] };
   }
+  try {
+    const secret = stateSecret();
+    const state = JSON.parse(secret ? decryptState(raw, secret) : raw);
+    return { offset: Number(state.offset) || 0, records: Array.isArray(state.records) ? state.records : [] };
+  } catch (_error) {
+    console.error('[telegram-digest] could not read saved state (wrong TELEGRAM_DIGEST_KEY?), starting fresh');
+    return { offset: 0, records: [] };
+  }
+}
+
+function saveState(file, state) {
+  const json = JSON.stringify(state);
+  const secret = stateSecret();
+  writeFileAtomic(file, secret ? encryptState(json, secret) : json, { mode: 0o600 });
 }
 
 async function fetchBotRecords(token) {
@@ -129,7 +151,7 @@ async function fetchBotRecords(token) {
     offset = updates[updates.length - 1].update_id + 1;
   }
   records = records.slice(-MAX_STORED);
-  writeFileAtomic(file, JSON.stringify({ offset, records }, null, 2), { mode: 0o600 });
+  saveState(file, { offset, records });
   return records;
 }
 
