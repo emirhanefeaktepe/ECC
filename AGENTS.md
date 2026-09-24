@@ -1,6 +1,6 @@
 # Everything Claude Code (ECC) — Agent Instructions
 
-This is a **production-ready AI coding plugin** providing 68 specialized agents, 292 skills, 94 commands, and automated hook workflows for software development.
+This is a **production-ready AI coding plugin** providing 69 specialized agents, 292 skills, 95 commands, and automated hook workflows for software development.
 
 **Version:** 2.2.2
 
@@ -48,6 +48,7 @@ This is a **production-ready AI coding plugin** providing 68 specialized agents,
 | mle-reviewer | Production ML pipeline review | ML pipelines, evals, serving, monitoring, rollback |
 | rag-pipeline-reviewer | RAG pipeline review | Retrieval quality, chunking, reranking, RAGAS evaluation coverage |
 | typescript-reviewer | TypeScript/JavaScript code review | TypeScript/JavaScript projects |
+| jarvis | JARVIS-style orchestrator that plans, delegates, verifies, and briefs | "Just handle it" multi-step goals, unsure which agent to use |
 
 ## Agent Orchestration
 
@@ -61,6 +62,7 @@ Use agents proactively without user prompt:
 - Autonomous loops / loop monitoring → **ecc:loop-operator**
 - Harness config reliability and cost → **ecc:harness-optimizer**
 - RAG/retrieval pipeline changes → **ecc:rag-pipeline-reviewer**
+- Multi-step "just handle it" goals → **ecc:jarvis**
 
 Use parallel execution for independent operations — launch multiple agents simultaneously.
 
@@ -153,9 +155,9 @@ Troubleshoot failures: check test isolation → verify mocks → fix implementat
 ## Project Structure
 
 ```
-agents/          — 68 specialized subagents
+agents/          — 69 specialized subagents
 skills/          — 292 workflow skills and domain knowledge
-commands/        — 94 slash commands
+commands/        — 95 slash commands
 hooks/           — Trigger-based automations
 rules/           — Always-follow guidelines (common + per-language)
 scripts/         — Cross-platform Node.js utilities
