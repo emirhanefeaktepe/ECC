@@ -1,0 +1,79 @@
+name: Telegram University Digest
+
+# Collects course group messages with a Telegram bot every hour and sends an
+# organized digest (assignments, exams, announcements) every morning.
+# Setup: docs/telegram-university-digest.md ("iPad / telefon" section).
+# Message content never goes to logs; stored state is encrypted.
+
+on:
+  schedule:
+    - cron: '23 * * * *' # hourly: collect new messages (Bot API keeps them only 24h)
+    - cron: '0 5 * * *' # 08:00 Europe/Istanbul: send the digest
+  workflow_dispatch:
+    inputs:
+      send:
+        description: 'Send the digest to Telegram now'
+        type: boolean
+        default: true
+      days:
+        description: 'Look back N days'
+        default: '14'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    name: Collect and send digest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Europe/Istanbul
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_DIGEST_CHAT_ID: ${{ secrets.TELEGRAM_DIGEST_CHAT_ID }}
+      TELEGRAM_DIGEST_KEY: ${{ secrets.TELEGRAM_DIGEST_KEY }}
+      TELEGRAM_DIGEST_HOME: ${{ github.workspace }}/.telegram-digest
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_DIGEST_CHAT_ID" ] && [ -n "$TELEGRAM_DIGEST_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Telegram digest secrets are not set; skipping."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.config.outputs.enabled == 'true'
+
+      - name: Restore encrypted state
+        if: steps.config.outputs.enabled == 'true'
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: .telegram-digest
+          key: telegram-digest-${{ github.run_id }}
+          restore-keys: telegram-digest-
+
+      - name: Collect messages
+        if: steps.config.outputs.enabled == 'true'
+        run: node scripts/telegram-digest.js --bot --days 0 --out "$RUNNER_TEMP/digest.md"
+
+      - name: Send digest
+        if: >-
+          steps.config.outputs.enabled == 'true' &&
+          (github.event.schedule == '0 5 * * *' || (github.event_name == 'workflow_dispatch' && inputs.send))
+        env:
+          DAYS: ${{ inputs.days || '14' }}
+        run: node scripts/telegram-digest.js --bot --days "$DAYS" --send --out "$RUNNER_TEMP/digest.md"
+
+      - name: Save encrypted state
+        if: always() && steps.config.outputs.enabled == 'true' && hashFiles('.telegram-digest/state.json') != ''
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: .telegram-digest
+          key: telegram-digest-${{ github.run_id }}
