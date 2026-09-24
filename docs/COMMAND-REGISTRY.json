@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "totalCommands": 94,
+  "totalCommands": 95,
   "commands": [
     {
       "command": "aside",
@@ -398,6 +398,15 @@
         "continuous-learning-v2"
       ],
       "path": "commands/instinct-status.md"
+    },
+    {
+      "command": "jarvis",
+      "description": "Hand a goal to JARVIS, the orchestrator agent that plans, delegates to ECC specialist agents, verifies, and reports back with a briefing.",
+      "type": "orchestration",
+      "primaryAgents": [],
+      "allAgents": [],
+      "skills": [],
+      "path": "commands/jarvis.md"
     },
     {
       "command": "jira",
@@ -1030,7 +1039,7 @@
     "byType": {
       "build": 2,
       "general": 10,
-      "orchestration": 11,
+      "orchestration": 12,
       "planning": 2,
       "refactoring": 1,
       "review": 15,
